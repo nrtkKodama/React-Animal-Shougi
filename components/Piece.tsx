@@ -10,11 +10,10 @@ interface PieceProps {
     isSelected?: boolean;
 }
 
-const MoveIndicator: React.FC<{ moves: [number, number][], player: Player }> = ({ moves, player }) => {
-    const direction = player === Player.SENTE ? -1 : 1;
+const MoveIndicator: React.FC<{ moves: [number, number][] }> = ({ moves }) => {
     const positions = moves.map(([dy, dx]) => ({
         cx: 50 + dx * 28,
-        cy: 50 + (dy * direction) * 28,
+        cy: 50 + dy * 28, // The containing g element is rotated for GOTE, so no need to flip dy here
     }));
 
     return (
@@ -25,6 +24,7 @@ const MoveIndicator: React.FC<{ moves: [number, number][], player: Player }> = (
         </g>
     );
 };
+
 
 const LionIcon: React.FC = () => <text x="50" y="65" fontSize="55" textAnchor="middle" dominantBaseline="middle">🦁</text>;
 const GiraffeIcon: React.FC = () => <text x="50" y="65" fontSize="55" textAnchor="middle" dominantBaseline="middle">🦒</text>;
@@ -64,7 +64,7 @@ const Piece: React.FC<PieceProps> = ({ pieceType, player, className, isSelected 
                         strokeLinejoin="round"
                     />
                     {pieceSVGs[pieceType]}
-                    <MoveIndicator moves={PIECE_MOVES[pieceType]} player={player} />
+                    <MoveIndicator moves={PIECE_MOVES[pieceType]} />
                 </g>
             </svg>
         </div>

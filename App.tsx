@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import Home from './components/Home';
 import OfflineGame from './components/OfflineGame';
@@ -6,7 +5,8 @@ import OnlineGame from './components/OnlineGame';
 
 export enum GameMode {
   NONE,
-  OFFLINE,
+  OFFLINE_PLAYER,
+  OFFLINE_AI,
   ONLINE
 }
 
@@ -15,8 +15,10 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     switch (gameMode) {
-      case GameMode.OFFLINE:
-        return <OfflineGame onBack={() => setGameMode(GameMode.NONE)} />;
+      case GameMode.OFFLINE_PLAYER:
+        return <OfflineGame onBack={() => setGameMode(GameMode.NONE)} opponentType="human" />;
+      case GameMode.OFFLINE_AI:
+        return <OfflineGame onBack={() => setGameMode(GameMode.NONE)} opponentType="ai" />;
       case GameMode.ONLINE:
         return <OnlineGame onBack={() => setGameMode(GameMode.NONE)} />;
       case GameMode.NONE:

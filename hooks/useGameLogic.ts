@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { GameState, Player, BoardState, PieceType, Position, Piece } from '../types';
 import { INITIAL_BOARD, PIECE_MOVES } from '../constants';
@@ -13,6 +12,26 @@ const createInitialState = (): GameState => ({
     winner: null,
     isCheck: false,
 });
+
+const getValidMoves = (pos: Position, piece: Piece, board: BoardState): Position[] => {
+    const moves: Position[] = [];
+    const moveSet = PIECE_MOVES[piece.type];
+
+    for (const [dy, dx] of moveSet) {
+        // SENTE moves towards smaller row numbers, GOTE moves towards larger row numbers.
+        const newRow = piece.player === Player.SENTE ? pos.row + dy : pos.row - dy;
+        const newCol = piece.player === Player.SENTE ? pos.col + dx : pos.col - dx;
+
+
+        if (newRow >= 0 && newRow < 4 && newCol >= 0 && newCol < 3) {
+            const targetPiece = board[newRow][newCol];
+            if (!targetPiece || targetPiece.player !== piece.player) {
+                moves.push({ row: newRow, col: newCol });
+            }
+        }
+    }
+    return moves;
+};
 
 export const useGameLogic = () => {
     const [gameState, setGameState] = useState<GameState>(createInitialState());
@@ -51,26 +70,6 @@ export const useGameLogic = () => {
         const attackingPlayer = defendingPlayer === Player.SENTE ? Player.GOTE : Player.SENTE;
         return isSquareAttacked(board, lionPos, attackingPlayer);
     }, [findLion, isSquareAttacked]);
-
-
-    const getValidMoves = (pos: Position, piece: Piece, board: BoardState): Position[] => {
-        const moves: Position[] = [];
-        const moveSet = PIECE_MOVES[piece.type];
-        const direction = piece.player === Player.SENTE ? -1 : 1;
-
-        for (const [dy, dx] of moveSet) {
-            const newRow = pos.row + (dy * direction);
-            const newCol = pos.col + dx;
-
-            if (newRow >= 0 && newRow < 4 && newCol >= 0 && newCol < 3) {
-                const targetPiece = board[newRow][newCol];
-                if (!targetPiece || targetPiece.player !== piece.player) {
-                    moves.push({ row: newRow, col: newCol });
-                }
-            }
-        }
-        return moves;
-    };
     
     const getValidDrops = (board: BoardState): Position[] => {
       const drops: Position[] = [];
@@ -98,82 +97,86 @@ export const useGameLogic = () => {
         return pieceType;
     };
 
-    const movePiece = (from: Position, to: Position) => {
-        if (gameState.winner) return;
+    const movePiece = useCallback((from: Position, to: Position) => {
+        setGameState(currentState => {
+            if (currentState.winner) return currentState;
 
-        const piece = gameState.board[from.row][from.col];
-        if (!piece || piece.player !== gameState.currentPlayer) return;
+            const piece = currentState.board[from.row][from.col];
+            if (!piece || piece.player !== currentState.currentPlayer) return currentState;
 
-        const validMoves = getValidMoves(from, piece, gameState.board);
-        if (!validMoves.some(m => m.row === to.row && m.col === to.col)) {
-            setSelectedPiece(null);
-            return;
-        }
-
-        const newBoard = gameState.board.map(r => [...r]);
-        const newCaptured = { ...gameState.capturedPieces };
-        
-        const capturedPiece = newBoard[to.row][to.col];
-        if (capturedPiece) {
-            newCaptured[gameState.currentPlayer] = [...newCaptured[gameState.currentPlayer], demotePiece(capturedPiece.type)];
-        }
-
-        newBoard[to.row][to.col] = newBoard[from.row][from.col];
-        newBoard[from.row][from.col] = null;
-        
-        // Promotion
-        const movedPiece = newBoard[to.row][to.col];
-        if (movedPiece?.type === PieceType.CHICK) {
-            const promotionRow = movedPiece.player === Player.SENTE ? 0 : 3;
-            if (to.row === promotionRow) {
-                movedPiece.type = PieceType.HEN;
+            const validMoves = getValidMoves(from, piece, currentState.board);
+            if (!validMoves.some(m => m.row === to.row && m.col === to.col)) {
+                setSelectedPiece(null);
+                return currentState;
             }
-        }
-        
-        let newState: GameState = {
-            ...gameState,
-            board: newBoard,
-            capturedPieces: newCaptured
-        };
-        
-        checkWinConditions(newState, to);
-    };
 
-    const dropPiece = (pos: Position, pieceType: PieceType) => {
-        if (gameState.winner) return;
-        
-        const newBoard = gameState.board.map(r => [...r]);
-        if(newBoard[pos.row][pos.col]){
-            setSelectedPiece(null);
-            return;
-        }
+            const newBoard = currentState.board.map(r => [...r]);
+            const newCaptured = { ...currentState.capturedPieces };
+            
+            const capturedPiece = newBoard[to.row][to.col];
+            if (capturedPiece) {
+                newCaptured[currentState.currentPlayer] = [...newCaptured[currentState.currentPlayer], demotePiece(capturedPiece.type)];
+            }
 
-        newBoard[pos.row][pos.col] = { type: pieceType, player: gameState.currentPlayer };
+            newBoard[to.row][to.col] = newBoard[from.row][from.col];
+            newBoard[from.row][from.col] = null;
+            
+            // Promotion
+            const movedPiece = newBoard[to.row][to.col];
+            if (movedPiece?.type === PieceType.CHICK) {
+                const promotionRow = movedPiece.player === Player.SENTE ? 0 : 3;
+                if (to.row === promotionRow) {
+                    movedPiece.type = PieceType.HEN;
+                }
+            }
+            
+            let newState: GameState = {
+                ...currentState,
+                board: newBoard,
+                capturedPieces: newCaptured
+            };
+            
+            return checkWinConditions(newState, to);
+        });
+        setSelectedPiece(null);
+    }, []);
 
-        const newCaptured = { ...gameState.capturedPieces };
-        const pieceIndex = newCaptured[gameState.currentPlayer].indexOf(pieceType);
-        if(pieceIndex > -1) {
-            newCaptured[gameState.currentPlayer].splice(pieceIndex, 1);
-        }
+    const dropPiece = useCallback((pos: Position, pieceType: PieceType) => {
+        setGameState(currentState => {
+            if (currentState.winner) return currentState;
+            
+            const newBoard = currentState.board.map(r => [...r]);
+            if(newBoard[pos.row][pos.col]){
+                setSelectedPiece(null);
+                return currentState;
+            }
 
-        let newState: GameState = {
-            ...gameState,
-            board: newBoard,
-            capturedPieces: newCaptured
-        };
+            newBoard[pos.row][pos.col] = { type: pieceType, player: currentState.currentPlayer };
 
-        checkWinConditions(newState);
-    };
+            const newCaptured = { ...currentState.capturedPieces };
+            const pieceIndex = newCaptured[currentState.currentPlayer].indexOf(pieceType);
+            if(pieceIndex > -1) {
+                newCaptured[currentState.currentPlayer].splice(pieceIndex, 1);
+            }
 
-    const checkWinConditions = (state: GameState, lastMoveTo?: Position) => {
+            let newState: GameState = {
+                ...currentState,
+                board: newBoard,
+                capturedPieces: newCaptured
+            };
+
+            return checkWinConditions(newState);
+        });
+        setSelectedPiece(null);
+    }, []);
+
+    const checkWinConditions = (state: GameState, lastMoveTo?: Position): GameState => {
         const opponent = state.currentPlayer === Player.SENTE ? Player.GOTE : Player.SENTE;
         
         // 1. Lion Capture
         const opponentLion = findLion(state.board, opponent);
         if (!opponentLion) {
-            setGameState({ ...state, winner: state.currentPlayer });
-            setSelectedPiece(null);
-            return;
+            return { ...state, winner: state.currentPlayer };
         }
 
         // 2. "Try" rule: Lion reaches the final rank
@@ -182,19 +185,15 @@ export const useGameLogic = () => {
             if (movedPiece && movedPiece.type === PieceType.LION && movedPiece.player === state.currentPlayer) {
                 const promotionRow = state.currentPlayer === Player.SENTE ? 0 : 3;
                 if (lastMoveTo.row === promotionRow) {
-                    // Check if the lion can be captured next turn
                     const canBeCaptured = isSquareAttacked(state.board, lastMoveTo, opponent);
                     if (!canBeCaptured) {
-                        setGameState({ ...state, winner: state.currentPlayer });
-                        setSelectedPiece(null);
-                        return;
+                        return { ...state, winner: state.currentPlayer };
                     }
                 }
             }
         }
         
-        setGameState(switchPlayer(state));
-        setSelectedPiece(null);
+        return switchPlayer(state);
     }
     
     const handleSquareClick = (pos: Position) => {
@@ -241,12 +240,83 @@ export const useGameLogic = () => {
         return [];
     }
     
+    const makeAIMove = useCallback(() => {
+        const player = gameState.currentPlayer;
+        const allBoardMoves: { from: Position, to: Position }[] = [];
+        const allDrops: { pos: Position, pieceType: PieceType }[] = [];
+
+        // 1. Gather all possible moves
+        for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 3; c++) {
+                const piece = gameState.board[r][c];
+                if (piece && piece.player === player) {
+                    const validMoves = getValidMoves({ row: r, col: c }, piece, gameState.board);
+                    validMoves.forEach(to => allBoardMoves.push({ from: { row: r, col: c }, to }));
+                }
+            }
+        }
+        const validDropSquares = getValidDrops(gameState.board);
+        gameState.capturedPieces[player].forEach(pieceType => {
+            validDropSquares.forEach(pos => {
+                allDrops.push({ pos, pieceType });
+            });
+        });
+
+        // 2. Find best move with simple strategy
+        let winningMoves = [];
+        let captureMoves = [];
+
+        // Check board moves for captures/wins
+        for (const move of allBoardMoves) {
+            const targetPiece = gameState.board[move.to.row][move.to.col];
+            if (targetPiece) {
+                if (targetPiece.type === PieceType.LION) {
+                    winningMoves.push({ type: 'move', ...move });
+                }
+                captureMoves.push({ type: 'move', ...move });
+            }
+        }
+        
+        if (winningMoves.length > 0) {
+            const chosenMove = winningMoves[0];
+            movePiece(chosenMove.from, chosenMove.to);
+            return;
+        }
+
+        if (captureMoves.length > 0) {
+            const chosenMove = captureMoves[Math.floor(Math.random() * captureMoves.length)];
+            movePiece(chosenMove.from, chosenMove.to);
+            return;
+        }
+
+        // FIX: Explicitly define types for AI actions to ensure correct type inference for the discriminated union.
+        // This prevents TypeScript from widening the 'type' property to 'string', which was causing type narrowing to fail.
+        type MoveAction = { type: 'move', from: Position, to: Position };
+        type DropAction = { type: 'drop', pos: Position, pieceType: PieceType };
+
+        const allPossibleActions: (MoveAction | DropAction)[] = [
+            ...allBoardMoves.map(m => ({ type: 'move' as const, ...m })),
+            ...allDrops.map(d => ({ type: 'drop' as const, ...d }))
+        ];
+
+        if (allPossibleActions.length > 0) {
+            const randomAction = allPossibleActions[Math.floor(Math.random() * allPossibleActions.length)];
+            if (randomAction.type === 'move') {
+                movePiece(randomAction.from, randomAction.to);
+            } else {
+                dropPiece(randomAction.pos, randomAction.pieceType);
+            }
+        }
+
+    }, [gameState, movePiece, dropPiece]);
+
     return {
         gameState,
         selectedPiece,
         handleSquareClick,
         handleCapturedPieceClick,
         resetGame,
-        getHighlights
+        getHighlights,
+        makeAIMove,
     };
 };

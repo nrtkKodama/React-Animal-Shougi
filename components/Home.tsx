@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { GameMode } from '../App';
 
@@ -14,10 +13,16 @@ const Home: React.FC<HomeProps> = ({ setGameMode }) => {
             
             <div className="space-y-4">
                 <button
-                    onClick={() => setGameMode(GameMode.OFFLINE)}
+                    onClick={() => setGameMode(GameMode.OFFLINE_PLAYER)}
                     className="w-64 bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-6 rounded-lg text-xl transition-transform transform hover:scale-105"
                 >
-                    Play Offline
+                    Play vs Friend
+                </button>
+                 <button
+                    onClick={() => setGameMode(GameMode.OFFLINE_AI)}
+                    className="w-64 bg-teal-500 hover:bg-teal-600 text-white font-bold py-4 px-6 rounded-lg text-xl transition-transform transform hover:scale-105"
+                >
+                    Play vs AI
                 </button>
                 <button
                     onClick={() => setGameMode(GameMode.ONLINE)}
@@ -26,7 +31,11 @@ const Home: React.FC<HomeProps> = ({ setGameMode }) => {
                     Play Online
                 </button>
             </div>
-             <p className="mt-8 text-sm text-stone-500">Offline: Play with a friend on the same device.<br/>Online: Play against another player over the internet.</p>
+             <p className="mt-8 text-sm text-stone-500">
+                vs Friend: Play on the same device.<br/>
+                vs AI: Play against a computer opponent.<br/>
+                Online: Play over the internet.
+            </p>
         </div>
     );
 };

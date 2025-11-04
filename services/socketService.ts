@@ -3,7 +3,7 @@
 // In a real application, you would use the 'socket.io-client' library
 // and connect to a real Node.js server.
 
-import { GameState, Player, Position, PieceType } from '../types';
+import { GameState, Player, Position, PieceType, Piece, BoardState } from '../types';
 import { INITIAL_BOARD, PIECE_MOVES } from '../constants';
 
 type EventCallback = (...args: any[]) => void;
@@ -13,6 +13,25 @@ export interface MockSocket {
   emit: (event: string, ...args: any[]) => void;
   disconnect: () => void;
 }
+
+const getValidMovesForPiece = (pos: Position, piece: Piece, board: BoardState): Position[] => {
+    const moves: Position[] = [];
+    const moveSet = PIECE_MOVES[piece.type];
+
+    for (const [dy, dx] of moveSet) {
+        const newRow = piece.player === Player.SENTE ? pos.row + dy : pos.row - dy;
+        const newCol = pos.col + dx;
+
+        if (newRow >= 0 && newRow < 4 && newCol >= 0 && newCol < 3) {
+            const targetPiece = board[newRow][newCol];
+            if (!targetPiece || targetPiece.player !== piece.player) {
+                moves.push({ row: newRow, col: newCol });
+            }
+        }
+    }
+    return moves;
+};
+
 
 // Barebones game logic for the mock server
 const createMockServerLogic = () => {
@@ -101,34 +120,28 @@ export const mockSocket = (): MockSocket => {
     
     const makeOpponentMove = () => {
        opponentMoveTimeout = setTimeout(() => {
-            // Simple AI: find a piece and make a random valid-ish move
-            const player = server.getState().currentPlayer;
-            const pieces: {pos: Position, piece: any}[] = [];
-            for(let r=0; r<4; r++){
-                for(let c=0; c<3; c++){
-                    const piece = server.getState().board[r][c];
-                    if(piece && piece.player === player) {
-                        pieces.push({pos: {row: r, col: c}, piece});
+            const currentState = server.getState();
+            const player = currentState.currentPlayer;
+            const allPossibleMoves: { from: Position, to: Position }[] = [];
+
+            // Find all valid moves for the current AI player
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 3; c++) {
+                    const piece = currentState.board[r][c];
+                    if (piece && piece.player === player) {
+                        const validMoves = getValidMovesForPiece({ row: r, col: c }, piece, currentState.board);
+                        validMoves.forEach(to => allPossibleMoves.push({ from: { row: r, col: c }, to }));
                     }
                 }
             }
 
-            if(pieces.length > 0) {
-                const randomPiece = pieces[Math.floor(Math.random() * pieces.length)];
-                const moveSet = PIECE_MOVES[randomPiece.piece.type];
-                const dir = player === Player.SENTE ? -1 : 1;
-                const moveTo = moveSet[Math.floor(Math.random() * moveSet.length)];
-                
-                const to = { row: randomPiece.pos.row + (moveTo[0] * dir), col: randomPiece.pos.col + moveTo[1] };
-                
-                // Simple boundary and friendly piece check
-                if (to.row >= 0 && to.row < 4 && to.col >= 0 && to.col < 3 && server.getState().board[to.row][to.col]?.player !== player) {
-                     const newState = server.move({ from: randomPiece.pos, to });
-                     if (newState) trigger('gameStateUpdate', newState);
-                     return;
-                }
+            if (allPossibleMoves.length > 0) {
+                // Select a random move from all possible moves
+                const randomMove = allPossibleMoves[Math.floor(Math.random() * allPossibleMoves.length)];
+                const newState = server.move({ from: randomMove.from, to: randomMove.to });
+                if (newState) trigger('gameStateUpdate', newState);
             }
-       }, 2000);
+       }, 1500 + Math.random() * 1000); // Add some delay for realism
     }
 
     const emit = (event: string, ...args: any[]) => {
@@ -160,22 +173,24 @@ export const mockSocket = (): MockSocket => {
                 makeOpponentMove();
             }
         }
+         if (event === 'joinRoom') {
+            // In this mock, we just assume the room exists and start the game
+         }
     };
     
     const disconnect = () => {
         clearTimeout(opponentMoveTimeout);
-        console.log("Socket disconnected");
     };
 
     // Simulate connection and matchmaking
-    setTimeout(() => trigger('connect'), 500);
+    setTimeout(() => trigger('connect'), 200);
     setTimeout(() => {
         const player = Math.random() > 0.5 ? Player.SENTE : Player.GOTE;
         trigger('gameStart', { player, initialState: server.getState() });
         if(player === Player.GOTE){
             makeOpponentMove();
         }
-    }, 2000);
+    }, 500);
 
     return { on, emit, disconnect };
 };
