@@ -1,0 +1,5 @@
+{
+  "name": "Dobutsu Shogi (Animal Shogi)",
+  "description": "A web-based implementation of the Japanese board game Dobutsu Shogi (Animal Shogi). It features both offline hot-seat play and an online multiplayer mode using Socket.io. The application is fully responsive, offering a seamless experience on both desktop and mobile devices.",
+  "requestFramePermissions": []
+}
